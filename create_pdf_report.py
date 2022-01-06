@@ -1,13 +1,13 @@
 # %%
 import yfinance as yf
 import plotly as py
-from plotly.offline import init_notebook_mode, iplot
-from plotly.tools import FigureFactory as FF
 import os
 import pandas as pd
 import plotly.graph_objects as go
 import base64
 from xhtml2pdf import pisa
+
+DEVELOP = False
 
 # %%
 
@@ -39,18 +39,18 @@ tickers = ['^GSPC', '^FTSE', '^HSI', '^N225',
            'BTC-USD', 'ETH-USD']
 
 # %%
-if not os.path.exists("./dled_data.csv"):
+if DEVELOP and os.path.exists("./dled_data.csv"):
+    data = pd.read_csv("./dled_data.csv", header=[0, 1],
+                       skipinitialspace=True, index_col=0)
+else:
     data = yf.download(
         tickers=' '.join(tickers),
-        period='1y',
-        interval='1d',
+        period='3d',
+        interval='15m',
         group_by='ticker',
         auto_adjust=True,
     )
     data.to_csv("./dled_data.csv")
-else:
-    data = pd.read_csv("./dled_data.csv", header=[0, 1],
-                       skipinitialspace=True, index_col=0)
 
 fetchd_tickers = data.columns.get_level_values(0).drop_duplicates()
 data.iloc[:5, :5]
@@ -60,11 +60,23 @@ data.iloc[:5, :5]
 figures = []
 for ft in tickers:
     df = data[[ft]].droplevel(0, axis=1)
+    df = df[['Open', 'High', 'Low', 'Close']].dropna()
+
+    """
+    gapとなっている時間を抽出し、リスト名timegapとして取得する
+    """
+    # gapの期間中を時間単位で補間したDataFrameを取得。max()は便宜上入れています。
+    df.index = pd.to_datetime(df.index)
+    df_resample = df.resample('15min').max()
+    # 元々のindexとまとめてgapの時間以外を重複要素としてやる
+    merged_index = df.index.append(df_resample.index)
+    timegap = merged_index[~merged_index.duplicated(
+        keep=False)]  # 重複要素を除去することでgapとなっている時間を抽出する
     fig = go.Figure(data=[go.Candlestick(x=df.index,
-                    open=df['Open'],
-                    high=df['High'],
-                    low=df['Low'],
-                    close=df['Close'])]
+                                         open=df['Open'],
+                                         high=df['High'],
+                                         low=df['Low'],
+                                         close=df['Close'])]
                     )
     fig.update_layout(
         title=ft,
@@ -76,9 +88,12 @@ for ft in tickers:
         xaxis_rangeslider_visible=False,
         margin=dict(l=80, r=80, t=100, b=80)
     )
+    fig.update_xaxes(
+        rangebreaks=[dict(values=timegap, dvalue=3600000/4)]
+    )
     figures.append(fig)
 
-    # fig.show()
+# fig.show()
 
 # %%
 
@@ -109,4 +124,4 @@ for image in images:
     report_html += _
 
 # display(HTML(report_html))
-convert_html_to_pdf(report_html, 'report-2.pdf')
+convert_html_to_pdf(report_html, 'monitor.pdf')
