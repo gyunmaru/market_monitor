@@ -6,8 +6,20 @@ import pandas as pd
 import plotly.graph_objects as go
 import base64
 from xhtml2pdf import pisa
-
+# from IPython.display import display, HTML
+import datetime
+import pytz
+from dateutil.relativedelta import relativedelta
 DEVELOP = False
+
+# %%
+
+# jst = pytz.timezone('Asia/Tokyo')
+kyo = datetime.datetime.today().date()
+kinou = kyo - relativedelta(days=1)
+senshu = kyo - relativedelta(weeks=1)
+kyo,senshu = kyo.strftime("%Y-%m-%d"),senshu.strftime("%Y-%m-%d")
+kinou = kinou.strftime("%Y-%m-%d")
 
 # %%
 
@@ -41,11 +53,13 @@ tickers = ['^GSPC', '^FTSE', '^HSI', '^N225',
 # %%
 if DEVELOP and os.path.exists("./dled_data.csv"):
     data = pd.read_csv("./dled_data.csv", header=[0, 1],
-                       skipinitialspace=True, index_col=0)
+                       skipinitialspace=True, index_col=0,
+                       parse_dates=[0])
 else:
     data = yf.download(
         tickers=' '.join(tickers),
-        period='3d',
+        period='5d',
+        # start = senshu, end = kyo,
         interval='15m',
         group_by='ticker',
         auto_adjust=True,
@@ -60,7 +74,17 @@ data.iloc[:5, :5]
 figures = []
 for ft in tickers:
     df = data[[ft]].droplevel(0, axis=1)
-    df = df[['Open', 'High', 'Low', 'Close']].dropna()
+    df = df[['Open', 'High', 'Low', 'Close']].dropna()\
+        .sort_index()
+    df['hiduke'] = df.index.date
+    df = df.loc[df.index.strftime("%Y-%m-%d") <= kinou , :]
+    uq_dates = df.hiduke.unique()
+    if len(uq_dates) >=3 :
+        uq_dates = uq_dates[-3:]
+    # uq_dates = uq_dates.to_list()
+    df = df.query(f" hiduke in {tuple(uq_dates)}")
+    xlabels = df.reset_index().groupby('hiduke')\
+            .min()['Datetime']
 
     """
     gapとなっている時間を抽出し、リスト名timegapとして取得する
@@ -89,7 +113,9 @@ for ft in tickers:
         margin=dict(l=80, r=80, t=100, b=80)
     )
     fig.update_xaxes(
-        rangebreaks=[dict(values=timegap, dvalue=3600000/4)]
+        rangebreaks=[dict(values=timegap, dvalue=3600000/4)],
+        tickmode='array',
+        tickvals=xlabels
     )
     figures.append(fig)
 
@@ -123,5 +149,30 @@ for image in images:
     _ = _.format(image=image,  width=width, height=height)
     report_html += _
 
+# %%
+rtns = []
+for ft in tickers:
+    df = data[[ft]].droplevel(0, axis=1)\
+        .sort_index()
+    df = df[['Open', 'High', 'Low', 'Close']].dropna()
+    df = df.assign(date=df.index.strftime("%Y%m%d"))\
+        .drop_duplicates(subset=['date'],keep="last")
+
+    rtns.append(
+        pd.DataFrame(dict(index=ft,
+                rtn1d=100.*(df.Close[-1]/df.Close[-2]-1)
+            )
+            ,index = [0]
+        )
+    )
+
+
+report_html += pd.concat(rtns).to_html()
+# %%
+
+
 # display(HTML(report_html))
+# display(HTML(pd.concat(rtns).to_html()))
 convert_html_to_pdf(report_html, 'monitor.pdf')
+
+# %%
