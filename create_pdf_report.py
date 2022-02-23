@@ -77,7 +77,7 @@ for ft in tickers:
     df = df[['Open', 'High', 'Low', 'Close']].dropna()\
         .sort_index()
     df['hiduke'] = df.index.date
-    df = df.loc[df.index.strftime("%Y-%m-%d") <= kinou , :]
+    # df = df.loc[df.index.strftime("%Y-%m-%d") <= kinou , :]
     uq_dates = df.hiduke.unique()
     if len(uq_dates) >=3 :
         uq_dates = uq_dates[-3:]
