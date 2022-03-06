@@ -32,14 +32,16 @@ class Mail:
 
         if attach_filename != '':
             attach_file = open(attach_filename, 'rb')
-            payload = MIMEBase('application', 'octate-stream')
+            # payload = MIMEBase('application', 'octate-stream')
+            payload = MIMEBase('application', 'pdf',Name=attach_filename)
             payload.set_payload((attach_file).read())
             encoders.encode_base64(payload)
             # add payload header with filename
             payload.add_header(
-                'Content-Decomposition', 'attachment',
-                filename=attach_filename
+                'Content-Decomposition', 'attachment; filename= ' + \
+                    attach_filename
             )
+            print(attach_filename)
             msg.attach(payload)
 
         # SMTP server
